@@ -2,8 +2,10 @@
 import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signInWithRedirect, signOut } from 'firebase/auth';
 import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue';
 import { useFirebaseAuth, useFirestore } from 'vuefire'
-import { arrayUnion, collection, doc, getDoc, getDocs, onSnapshot, setDoc } from 'firebase/firestore';
+import { FieldValue, Timestamp, arrayUnion, collection, doc, getDoc, getDocs, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid'
+import { serverTimestamp } from 'firebase/database';
+import { FirebaseError } from 'firebase/app';
 const db = useFirestore()
 const auth = useFirebaseAuth()
 const user = ref()
@@ -28,6 +30,9 @@ onMounted(() => {
       userItems.value = []
       userShoppingLists.value = []
     }
+  })
+  watchEffect(() => {
+
   })
 })
 
@@ -133,7 +138,8 @@ const onSubmit = async () => {
     note: noteInput.value,
     image: imageInput.value,
     category: categoryInput.value,
-    quantity: 1
+    quantity: 1,
+    uid: generateUniqueId()
   }
 
   items.value.push(newItem)
@@ -151,6 +157,7 @@ const onSubmit = async () => {
       items: arrayUnion(newItem),
     }, { merge: true });
     console.log('Item added to user list successfully!')
+    fetchItemList()
   } catch (error) {
     console.error('Error adding new item:', error);
   }
@@ -178,12 +185,21 @@ const handleAddItem = (item) => {
 const listName = ref('')
 const handleAddShoppingList = async () => {
   const userRef = collection(db, 'shoppingList');
+  const newList = {
+    items: shoppingList.value,
+    timestamp: new Date(),
+    completed: false,
+    cancelled: false,
+  }
+
 
   try {
     await setDoc(doc(userRef, userId.value), {
-      [listName.value]: shoppingList.value,
+      [listName.value]: newList
     }, { merge: true });
     console.log('Item added to user list successfully!')
+    fetchShoppingList()
+    shoppingList.value = []
   } catch (error) {
     console.error('Error adding new item:', error);
   }
@@ -204,9 +220,23 @@ const groupedItems = computed(() => {
   return grouped
 })
 
-
 const getCategoryItems = (category) => {
   return groupedItems.value[category] || [];
+}
+
+const groupedShoplistItems = computed(() => {
+  const grouped = {};
+  for (const item of viewingList.value.items) {
+    if (!grouped[item.category]) {
+      grouped[item.category] = [];
+    }
+    grouped[item.category].push(item)
+  }
+  return grouped
+})
+
+const getShoplistItems = (category) => {
+  return groupedShoplistItems.value[category] || [];
 }
 
 const groupedListItems = computed(() => {
@@ -224,8 +254,92 @@ const getListItems = (category) => {
   return groupedListItems.value[category] || [];
 }
 
+const groupedShoppingLists = computed(() => {
+  const grouped = {};
+  for (const listName in userShoppingLists.value) {
+    const list = userShoppingLists.value[listName];
+    const timestamp = list.timestamp;
+    const date = new Date(timestamp.seconds * 1000);
+    const monthYear = `${date.toLocaleString('default', { month: 'long' })} ${date.getFullYear()}`;
+
+    if (!grouped[monthYear]) {
+      grouped[monthYear] = [];
+    }
+
+    grouped[monthYear].push({ ...list, name: listName });
+  }
+  return grouped;
+});
+
+const formatDate = (timestamp) => {
+  const dateObj = new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1000000);
+  return dateObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+}
+
 const activeAddItem = ref(false)
 const categoryInputActive = ref(false)
+const activeCheckItem = ref()
+
+const handleClickItem = (item) => {
+  activeAddItem.value = false
+  activeCheckItem.value = item
+
+}
+
+const handleItemDeletion = async () => {
+  const userRef = doc(db, 'itemList', userId.value)
+  const userSnapshot = await getDoc(userRef);
+
+  if (userSnapshot.exists()) {
+    const itemList = userSnapshot.data().items || [];
+
+    // Find the index of the item with the given item uid
+    const index = itemList.findIndex(item => {
+      console.log('item:', item.uid, 'active:', activeCheckItem.value.uid);
+      return item.uid === activeCheckItem.value.uid;
+    });
+
+    console.log(itemList, index)
+    if (index !== -1) {
+      // Remove the item from the array
+      itemList.splice(index, 1);
+    }
+
+    // Update the itemList in Firestore
+    await updateDoc(userRef, { items: itemList })
+      .then(() => {
+        activeCheckItem.value = ''
+      })
+      .catch((error) => console.error('Error deleting item:', error))
+  }
+}
+
+const ITEMS = 'items'
+const HISTORY = 'history'
+const STATISTICS = 'statistics'
+const activeNav = ref(ITEMS)
+
+const formatTimestamp = (timestamp) => {
+  const dateObj = new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1000000);
+
+  const year = dateObj.getFullYear();
+  const month = dateObj.getMonth() + 1;
+  const day = dateObj.getDate()
+  // Array of day abbreviations (0 - Sunday, 1 - Monday, etc.)
+  const dayAbbreviations = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayAbbr = dayAbbreviations[dateObj.getUTCDay()];
+
+  // Format the month without leading zero for months < 10
+
+  const formattedMonth = month < 10 ? month.toString() : month.toString().padStart(2, '0');
+
+  const formattedDate = `${dayAbbr} ${day}.${formattedMonth}.${year}`;
+
+  return formattedDate
+}
+
+const viewingList = ref()
+const viewingListName = ref()
 
 </script>
 
@@ -263,82 +377,32 @@ const categoryInputActive = ref(false)
     <button @click="handleSignOut">Sign Out</button>
     <p v-if="user">{{ user.email }}</p>
 
-    <div className="formContainer">
-      <h2>Add a new item</h2>
-      <form @submit.prevent="onSubmit">
-        <label for="name" required>Name</label>
-        <input type="text" id="name" v-model="nameInput" placeholder="Enter a name">
-        <label for="note">Note (optional)</label>
-        <textarea id="note" name="note" v-model="noteInput" rows="5"></textarea>
-        <label for="image">Image (optional)</label>
-        <input type="text" id="image" v-model="imageInput">
-
-        <select v-model="categoryInput" name="category" id="category" required>
-          <option value="" disabled selected hidden>Enter a category</option>
-          <option v-for="(category, index) in categories" :key="index" :value="category">{{ category }}</option>
-          <!-- <option value="fruitsAndVegetables">Fruits and vegetables</option>
-          <option value="meatAndFish">Meat and fish</option>
-          <option value="beverages">Beverages</option> -->
-        </select>
-
-        <button>cancel</button>
-        <button>Save</button>
-      </form>
-    </div>
-
-    <div className="itemsContainer">
-      <div v-for="(item, index) in items" :key="index" className="item">
-        <p>{{ item.name }}</p>
-        <button @click="handleAddItem(item)">+</button>
-      </div>
-    </div>
-
-    <div className="shoppingListContainer">
-      <div v-for="(item, index) in shoppingList" :key="index" className="shoppingListItem">
-        <p>{{ item.name }}</p>
-        <div className="piecesContainer">
-          <button @click="removeItem(index)">trash</button>
-          <button @click="item.quantity++">+</button>
-          <p>{{ item.quantity }} pcs</p>
-          <button @click="item.quantity--">-</button>
-        </div>
-      </div>
-      <label for="listName">List name</label>
-      <input type="text" required v-model="listName">
-      <button @click="handleAddShoppingList">add list</button>
-    </div>
-
-
-    <div v-if="userItems">
-      <p v-for="(item, index) in userItems" :key="index">
-        {{ item }}
-      </p>
-    </div>
-
-    <div v-if="userShoppingLists">
-      <p v-for="(item, name) in userShoppingLists" :key="name">
-        {{ name }}
-      </p>
-    </div>
-
-
     <div className="mainContainer">
 
       <div className="leftSidebar">
-        <div>
-          <p>image</p>
+        <div className="leftSidebarLogo">
+          <img src="logo.svg" />
         </div>
         <div className="navigation">
-          <button>a</button>
-          <button>b</button>
-          <button>c</button>
+          <div class="itemsNav">
+            <button :class="[activeNav == ITEMS ? 'activeNav' : '']" @click="activeNav = ITEMS">a</button>
+            <div className="tooltip">items</div>
+          </div>
+          <div class="historyNav">
+            <button :class="[activeNav == HISTORY ? 'activeNav' : '']" @click="activeNav = HISTORY">b</button>
+            <div className="tooltip">history</div>
+          </div>
+          <div class="statisticsNav">
+            <button :class="[activeNav == STATISTICS ? 'activeNav' : '']" @click="activeNav = STATISTICS">c</button>
+            <div className="tooltip">statistics</div>
+          </div>
         </div>
         <div>
           <p>cart</p>
         </div>
       </div>
 
-      <div className="itemListContainer">
+      <div className="itemListContainer" v-if="activeNav == ITEMS">
         <div className="top">
           <p><strong>Shoppingify</strong> allows you to take your shopping list wherever you go</p>
           <input type="text" placeholder="search">
@@ -348,8 +412,8 @@ const categoryInputActive = ref(false)
           <div className="category" v-for="(category, index) in categories" :key="index">
             <p className="itemCategory">{{ category }}</p>
             <div className="categoryContents">
-              <div v-for="(item, index) in getCategoryItems(category)" className="item">
-                <p>{{ item.name }}</p>
+              <div v-for="(item, index) in getCategoryItems(category)" className="item" v-if="userItems">
+                <p @click="handleClickItem(item)">{{ item.name }}</p>
                 <button @click="handleAddItem(item)">+</button>
               </div>
             </div>
@@ -357,7 +421,44 @@ const categoryInputActive = ref(false)
         </div>
       </div>
 
-      <div className="rightSidebar" v-if="!activeAddItem">
+      <div className="historyListContainer" v-if="activeNav == HISTORY">
+        <div className="top" v-if="!viewingList">
+          <p>Shopping history</p>
+        </div>
+        <div v-else className="viewingShopList">
+          <button class="checkItemBack" @click="viewingList = '', viewingListName = ''">back</button>
+          <p class="viewingListName">{{ viewingListName }}</p>
+          <span class="viewingListTimestamp">{{ formatTimestamp(viewingList.timestamp) }}</span>
+        </div>
+        <div className="content" v-if="!viewingList">
+          <div v-for="(lists, date) in groupedShoppingLists" :key="lists.name">
+            <p class="groupListDate">{{ date }}</p>
+            <div className="listItem" @click="viewingList = list, viewingListName = list.name" v-for="list in lists"
+              :key="list.name">
+              <p className="shopListName">{{ list.name }}</p>
+              <div className="shopListDetails">
+                <span className="shopListDate">{{ formatTimestamp(list.timestamp) }}</span>
+                <span :class="[list.completed ? 'completed' : 'ongoing']" v-if="!list.cancelled">{{ list.completed ?
+                  'completed' : 'ongoing' }}</span>
+                <span class="cancelled" v-else>cancelled</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="content" v-else>
+          <div className="category" v-for="(category, index) in categories" :key="index">
+            <p v-if="getShoplistItems(category).length > 0" className="shopListItemCategory">{{ category }}</p>
+            <div className="categoryContents">
+              <div v-for="(item, index) in getShoplistItems(category)" className="item" v-if="viewingList">
+                <p @click="handleClickItem(item)">{{ item.name }}</p>
+                <span class="pcs"><strong>{{ item.quantity }}</strong> pcs</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rightSidebar" v-if="!activeAddItem && !activeCheckItem">
         <div className="addItemBanner">
           <img src="/source.svg" alt="">
           <div className="addItemRight">
@@ -432,6 +533,27 @@ const categoryInputActive = ref(false)
         </div>
       </div>
 
+      <div v-if="activeCheckItem" className="checkItemContainer">
+        <button className="checkItemBack" @click="activeCheckItem = ''">back</button>
+        <img :src="activeCheckItem.image" alt="" v-if="activeCheckItem.image">
+        <div>
+          <label for="">name</label>
+          <p className="checkItemName">{{ activeCheckItem.name }}</p>
+        </div>
+        <div>
+          <label for="">category</label>
+          <p>{{ activeCheckItem.category }}</p>
+        </div>
+        <div>
+          <label for="">note</label>
+          <p>{{ activeCheckItem.note }}</p>
+        </div>
+        <div className="checkItemButtons">
+          <button @click="handleItemDeletion">delete</button>
+          <button @click="handleAddItem(activeCheckItem), activeCheckItem = ''">Add to list</button>
+        </div>
+      </div>
+
     </div>
   </main>
 </template>
@@ -479,7 +601,7 @@ const categoryInputActive = ref(false)
   /* border: 1px solid red; */
   display: flex;
   flex-direction: column;
-  padding: 1rem 1rem;
+  padding: 1rem 3rem;
 }
 
 .categoryContents {
@@ -560,6 +682,7 @@ const categoryInputActive = ref(false)
   padding: 1rem 1.5rem;
   color: white;
   font-weight: 600;
+  cursor: pointer;
 }
 
 .addItemBanner {
@@ -694,6 +817,7 @@ const categoryInputActive = ref(false)
 .itemCategory {
   margin: 1rem 0;
   font-size: 18px;
+  font-weight: 500;
 }
 
 .leftSidebar {
@@ -703,14 +827,24 @@ const categoryInputActive = ref(false)
   background-color: white;
 }
 
+.leftSidebarLogo {
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .navigation {
   display: flex;
   flex-direction: column;
 }
 
+.activeNav {
+  border-left: 3px solid rgba(249, 161, 9, 1) !important;
+}
+
 .navigation button {
   border: transparent;
   padding: 1rem 0;
+  width: 100%;
   background-color: transparent;
   cursor: pointer;
 }
@@ -719,6 +853,47 @@ const categoryInputActive = ref(false)
   border-left: 3px solid rgba(249, 161, 9, 1);
   background-color: transparent;
 }
+
+.navigation div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.navigation div:hover .tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  right: -50px;
+}
+
+.tooltip {
+  background-color: rgba(69, 69, 69, 1);
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  position: absolute !important;
+  width: 64px;
+  padding: 2px 0;
+  right: -30px;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.tooltip::before {
+  content: "";
+  /* background-color: red; */
+  background-color: rgba(69, 69, 69, 1);
+  position: absolute;
+  height: 8px;
+  width: 8px;
+  left: -3px;
+  transform: rotate(45deg);
+}
+
+
 
 .formContainer {
   padding: 1rem;
@@ -845,5 +1020,145 @@ const categoryInputActive = ref(false)
 .addItemButtons button:nth-child(2) {
   background-color: rgba(249, 161, 9, 1);
   color: white;
+}
+
+.checkItemContainer {
+  display: flex;
+  flex-direction: column;
+  padding: 2.5rem;
+  background-color: white;
+  justify-content: space-between;
+}
+
+.checkItemContainer label {
+  color: rgba(193, 193, 196, 1);
+  font-size: 12px;
+  margin-bottom: -.8rem;
+  font-weight: 500;
+}
+
+.checkItemBack {
+  width: max-content;
+  color: rgba(249, 161, 10, 1);
+  background-color: transparent;
+  border: transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.checkItemName {
+  font-size: 24px;
+}
+
+.checkItemContainer p {
+  font-weight: 500;
+}
+
+.checkItemButtons {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.checkItemContainer img {
+  width: 100%;
+  border-radius: 25px;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
+
+.checkItemButtons button {
+  padding: 1rem 1rem;
+  cursor: pointer;
+  font-weight: 700;
+  border: transparent;
+  border-radius: 12px;
+}
+
+.checkItemButtons button:nth-child(1) {
+  background-color: transparent;
+}
+
+.checkItemButtons button:nth-child(2) {
+  background-color: rgba(249, 161, 10, 1);
+  color: white;
+}
+
+.historyListContainer {
+  padding: 1rem 3rem;
+}
+
+.listItem {
+  background-color: white;
+  box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.05);
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  border-radius: 12px;
+}
+
+.shopListName {
+  font-weight: 500;
+  font-size: 18px;
+}
+
+.shopListDate {
+  font-weight: 500;
+  font-size: 14px;
+  color: rgba(193, 193, 196, 1);
+}
+
+.shopListDetails {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.ongoing {
+  /* border: 1px solid rgba(86, 204, 242, 1); */
+  border: 1px solid rgba(249, 161, 9, 1);
+  border-radius: 8px;
+  color: rgba(249, 161, 9, 1);
+  font-size: 14px;
+  padding: 0px 8px;
+}
+
+.groupListDate {
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 17px;
+}
+
+.viewingListName {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.viewingListTimestamp {
+  color: rgba(193, 193, 196, 1);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.shopListItemCategory {
+  font-weight: 500;
+  font-size: 18px;
+  margin: 2rem 0rem 1rem 0rem;
+}
+
+.pcs {
+  color: rgba(249, 161, 10, 1);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+strong {
+  font-weight: 700;
+}
+
+.item p {
+  font-size: 18px;
+  font-weight: 500;
 }
 </style>
