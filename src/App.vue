@@ -667,6 +667,8 @@ const countTops = () => {
       </div>
 
       <div className="rightSidebar" v-if="!activeAddItem && !activeCheckItem">
+
+
         <div className="addItemBanner">
           <img src="../public/source.svg" alt="">
           <div className="addItemRight">
@@ -674,6 +676,10 @@ const countTops = () => {
             <button @click="activeAddItem = true">Add item</button>
           </div>
         </div>
+
+
+
+
         <div v-if="shoppingList.length > 0" className="listName">
           <p>{{ listName ? listName : 'Shopping list' }}</p>
           <label for="listName">
@@ -705,6 +711,8 @@ const countTops = () => {
             <p>No items</p>
           </div>
         </div>
+
+
         <div className="addListContainer">
           <img className="emptyListImage" v-if="shoppingList.length < 1" src="../public/empty.svg" alt="">
           <form @submit.prevent="handleAddShoppingList">
@@ -797,7 +805,8 @@ const countTops = () => {
   /* border: 1px solid black; */
   padding: 1rem;
   overflow-y: scroll;
-  max-height: 80vh;
+  /* max-height: 80vh; */
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -859,6 +868,7 @@ const countTops = () => {
   /* border: 1px solid yellow; */
   display: grid;
   grid-template-columns: 90px 1.8fr .5fr;
+  height: 100vh;
 }
 
 .rightSidebar {
@@ -867,6 +877,7 @@ const countTops = () => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  max-height: 100vh;
 }
 
 .addListContainer {
