@@ -493,7 +493,7 @@ const countTops = () => {
 
       <div className="leftSidebar">
         <div className="leftSidebarLogo">
-          <img src="logo.svg" />
+          <img src="../public/logo.svg" />
         </div>
         <div className="navigation">
           <div class="itemsNav">
@@ -668,7 +668,7 @@ const countTops = () => {
 
       <div className="rightSidebar" v-if="!activeAddItem && !activeCheckItem">
         <div className="addItemBanner">
-          <img src="/source.svg" alt="">
+          <img src="../public/source.svg" alt="">
           <div className="addItemRight">
             <p>Didn't find what you need?</p>
             <button @click="activeAddItem = true">Add item</button>
@@ -706,7 +706,7 @@ const countTops = () => {
           </div>
         </div>
         <div className="addListContainer">
-          <img className="emptyListImage" v-if="shoppingList.length < 1" src="/empty.svg" alt="">
+          <img className="emptyListImage" v-if="shoppingList.length < 1" src="../public/empty.svg" alt="">
           <form @submit.prevent="handleAddShoppingList">
             <!-- <label for="listName">List name</label> -->
             <input type="text" required v-model="listName" id="listName" name="listName" placeholder="Enter a name">
