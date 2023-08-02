@@ -1,11 +1,22 @@
 <script setup>
-import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signInWithRedirect, signOut } from 'firebase/auth';
-import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue';
+
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js'
+import { Line } from 'vue-chartjs'
+
+import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { computed, onMounted, ref, watchEffect } from 'vue';
 import { useFirebaseAuth, useFirestore } from 'vuefire'
-import { FieldValue, Timestamp, arrayUnion, collection, doc, getDoc, getDocs, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
+import { arrayUnion, collection, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid'
-import { serverTimestamp } from 'firebase/database';
-import { FirebaseError } from 'firebase/app';
 const db = useFirestore()
 const auth = useFirebaseAuth()
 const user = ref()
@@ -15,6 +26,8 @@ const userId = ref()
 const userItems = ref([])
 const userShoppingLists = ref([])
 const categories = ref(['Fruits and vegetables', 'Meat and fish', 'Beverages'])
+const registering = ref(false)
+const canSignIn = ref(true)
 
 // Use watchEffect to create the observer
 onMounted(() => {
@@ -26,9 +39,11 @@ onMounted(() => {
       fetchShoppingList()
     } else {
       user.value = null
-      userId.value = null
+      userId.value = 'guest'
       userItems.value = []
       userShoppingLists.value = []
+      fetchItemList()
+      fetchShoppingList()
     }
   })
   watchEffect(() => {
@@ -72,6 +87,7 @@ const handleRegistration = () => {
       signUpEmail.value = ''
       signUpPassword.value = ''
       console.log(user)
+      registering.value = false
       // ..
     })
     .catch((error) => {
@@ -106,6 +122,7 @@ const handleSignOut = async () => {
       .then(() => {
         console.log('signedOut')
         // user.value = null
+        userId.value = 'guest'
       })
   } catch (error) {
     console.error('Error signing out:', error.message)
@@ -253,7 +270,7 @@ const groupedListItems = computed(() => {
 const getListItems = (category) => {
   return groupedListItems.value[category] || [];
 }
-
+const groupedShopLists = ref()
 const groupedShoppingLists = computed(() => {
   const grouped = {};
   for (const listName in userShoppingLists.value) {
@@ -268,6 +285,11 @@ const groupedShoppingLists = computed(() => {
 
     grouped[monthYear].push({ ...list, name: listName });
   }
+
+  groupedShopLists.value = grouped
+  calculateItemsPerMonth()
+  chartDataGen()
+  countTops()
   return grouped;
 });
 
@@ -340,6 +362,123 @@ const formatTimestamp = (timestamp) => {
 
 const viewingList = ref()
 const viewingListName = ref()
+const itemsPerMonth = ref()
+
+const calculateItemsPerMonth = () => {
+  const grouped = {}
+  for (let key in groupedShopLists.value) {
+    for (let date of groupedShopLists.value[key]) {
+      if (!grouped[key]) {
+        grouped[key] = date.items.length
+      } else {
+        grouped[key] += date.items.length
+      }
+    }
+  }
+  itemsPerMonth.value = grouped
+};
+
+const chartData = ref()
+// const chartOptions = ref({ responsive: true })
+const chartDataGen = () => {
+  const data = {
+    labels: [],
+    datasets: [
+      {
+        label: 'items',
+        backgroundColor: 'rgba(249, 161, 9, 1)',
+        data: []
+      }
+    ]
+  }
+
+  for (let key in itemsPerMonth.value) {
+    data.labels.push(key)
+    data.datasets[0].data.push(itemsPerMonth.value[key])
+  }
+  chartData.value = data
+}
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+)
+
+const topItemCounts = ref()
+const topCategoryCounts = ref()
+const allItemCounts = ref()
+const topItemPercentages = ref()
+const topCategoryPercentages = ref()
+const countTops = () => {
+  const grouped = groupedShopLists.value;
+  const itemCounts = {};
+  const categoryCounts = {};
+  let totalItems = 0
+
+  for (const month in grouped) {
+    const shoppingLists = grouped[month];
+    console.log(shoppingLists)
+
+    for (const shoplist in shoppingLists) {
+      const items = shoppingLists[shoplist].items;
+      totalItems += shoppingLists[shoplist].items.length
+
+      for (const item of items) {
+        const itemName = item.name;
+        const itemCategory = item.category
+
+        if (itemCounts[itemName]) {
+          itemCounts[itemName] += 1;
+        } else {
+          itemCounts[itemName] = 1;
+        }
+        if (categoryCounts[itemCategory]) {
+          categoryCounts[itemCategory] += 1;
+        } else {
+          categoryCounts[itemCategory] = 1;
+        }
+      }
+    }
+  }
+
+  const keyValueArray = Object.entries(itemCounts)
+  const sortedArray = keyValueArray.sort((a, b) => b[1] - a[1])
+  // const sortedObject = Object.fromEntries(sortedArray)
+  const percentages = []
+  for (let item of sortedArray) {
+    if (percentages.length < 4) {
+      let percentage = parseInt(item[1] / totalItems * 100)
+      percentages.push(percentage)
+    }
+  }
+  const categoryKeyValueArray = Object.entries(categoryCounts)
+  const sortedCategoryArray = categoryKeyValueArray.sort((a, b) => b[1] - a[1])
+  const categoryPercentages = []
+  for (let category of sortedCategoryArray) {
+    if (categoryPercentages.length < 4) {
+      let percentage = category[1] / totalItems * 100
+      categoryPercentages.push(percentage)
+    }
+  }
+  const roundedSum = categoryPercentages.reduce((sum, value) => sum + Math.ceil(value), 0)
+  const difference = 100 - roundedSum
+  const indexToCorrect = categoryPercentages.findIndex((value) => Math.ceil(value) !== value)
+  categoryPercentages[indexToCorrect] += difference
+  const integers = categoryPercentages.map((value) => Math.ceil(value))
+  // console.log(percentages)
+  // console.log(sortedArray)
+  // console.log(sortedObject)
+  topItemCounts.value = sortedArray
+  topCategoryCounts.value = sortedCategoryArray
+  allItemCounts.value = totalItems
+  topItemPercentages.value = percentages
+  topCategoryPercentages.value = integers
+}
 
 </script>
 
@@ -350,33 +489,6 @@ const viewingListName = ref()
   </header>
 
   <main>
-    <div className="registerFormContainer">
-      <form @submit.prevent="handleRegistration">
-        <label for="email">
-          <input type="email" id="email" name="email" placeholder="email" v-model="signUpEmail">
-        </label>
-        <label for="password">
-          <input type="password" id="pass" name="pass" placeholder="password" v-model="signUpPassword">
-        </label>
-        <button type="submit">Register</button>
-      </form>
-    </div>
-
-    <div className="signInFormContainer">
-      <form @submit.prevent="handleSignIn">
-        <label for="email">
-          <input type="email" id="email" name="email" placeholder="john@email.com" v-model="signInEmail">
-        </label>
-        <label for="password">
-          <input type="password" id="pass" name="pass" placeholder="password" v-model="signInPassword">
-        </label>
-        <button type="submit">Sign In</button>
-      </form>
-    </div>
-
-    <button @click="handleSignOut">Sign Out</button>
-    <p v-if="user">{{ user.email }}</p>
-
     <div className="mainContainer">
 
       <div className="leftSidebar">
@@ -385,20 +497,28 @@ const viewingListName = ref()
         </div>
         <div className="navigation">
           <div class="itemsNav">
-            <button :class="[activeNav == ITEMS ? 'activeNav' : '']" @click="activeNav = ITEMS">a</button>
+            <button :class="[activeNav == ITEMS ? 'activeNav' : '']" @click="activeNav = ITEMS">
+              <unicon name="list-ul"></unicon>
+            </button>
             <div className="tooltip">items</div>
           </div>
           <div class="historyNav">
-            <button :class="[activeNav == HISTORY ? 'activeNav' : '']" @click="activeNav = HISTORY">b</button>
+            <button :disabled="userItems.length === 0" :class="[activeNav == HISTORY ? 'activeNav' : '']"
+              @click="activeNav = HISTORY">
+              <unicon name="redo"></unicon>
+            </button>
             <div className="tooltip">history</div>
           </div>
           <div class="statisticsNav">
-            <button :class="[activeNav == STATISTICS ? 'activeNav' : '']" @click="activeNav = STATISTICS">c</button>
+            <button :disabled="userItems.length === 0" :class="[activeNav == STATISTICS ? 'activeNav' : '']"
+              @click="activeNav = STATISTICS">
+              <unicon name="chart"></unicon>
+            </button>
             <div className="tooltip">statistics</div>
           </div>
         </div>
         <div>
-          <p>cart</p>
+          <p style="display: none;">cart</p>
         </div>
       </div>
 
@@ -408,13 +528,53 @@ const viewingListName = ref()
           <input type="text" placeholder="search">
         </div>
 
+        <div v-if="registering" className="registerFormContainer">
+          <form @submit.prevent="handleRegistration">
+            <div>
+              <label for="email">
+                <input type="email" id="email" name="email" placeholder="email" v-model="signUpEmail">
+              </label>
+              <label for="password">
+                <input type="password" id="pass" name="pass" placeholder="password" v-model="signUpPassword">
+              </label>
+            </div>
+            <button class="registerBtn" type="submit">Register</button>
+          </form>
+          <p>Have an account? <button class="dontBtn" @click="registering = false">Login</button></p>
+        </div>
+
+        <div v-if="userId == 'guest' && !registering" className="signInFormContainer">
+          <form @submit.prevent="handleSignIn">
+            <div>
+              <label for="email">
+                <input type="email" id="email" name="email" placeholder="john@email.com" v-model="signInEmail">
+              </label>
+              <label for="password">
+                <input type="password" id="pass" name="pass" placeholder="password" v-model="signInPassword">
+              </label>
+            </div>
+            <button class="signInBtn" type="submit">Sign In</button>
+          </form>
+          <div>
+            <p>Don't have an account? <button class="dontBtn" @click="registering = true">register</button></p>
+            <p>Currently using app as guest</p>
+          </div>
+        </div>
+
+        <div class="signOutContainer">
+          <p v-if="user" class="userEmail">{{ user.email }}</p>
+          <button className="signOutBtn" v-if="userId && userId !== 'guest'" @click="handleSignOut">Sign Out</button>
+        </div>
+
         <div className="content">
           <div className="category" v-for="(category, index) in categories" :key="index">
             <p className="itemCategory">{{ category }}</p>
             <div className="categoryContents">
               <div v-for="(item, index) in getCategoryItems(category)" className="item" v-if="userItems">
                 <p @click="handleClickItem(item)">{{ item.name }}</p>
-                <button @click="handleAddItem(item)">+</button>
+                <button @click="handleAddItem(item)">
+                  <unicon name="plus" width="20" fill="rgba(193, 193, 196, 1)"></unicon>
+                </button>
               </div>
             </div>
           </div>
@@ -458,6 +618,54 @@ const viewingListName = ref()
         </div>
       </div>
 
+      <div class="statisticsContainer" v-if="activeNav == STATISTICS">
+        <div class="content">
+          <div class="topStatistics">
+
+            <div class="topItems">
+              <p class="topTitle">Top items</p>
+
+              <div v-for="(item, index) in topItemCounts.slice(0, 3)" :key="index">
+                <div class="itemStatContainer">
+                  <div class="itemName">
+                    <p>{{ item[0] }}</p>
+                    <p>{{ parseInt(item[1] / allItemCounts * 100) }}%</p>
+                  </div>
+                  <div class="itemStatBar">
+                    <div class="fill" :style="{ width: parseInt(item[1] / allItemCounts * 100) + '%' }"></div>
+                    <div class="back"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="topCategories">
+              <p class="topTitle">Top Categories</p>
+
+              <div v-for="(category, index) in topCategoryCounts.slice(0, 3)" :key="index">
+                <div class="itemStatContainer">
+                  <div class="categoryName">
+                    <p>{{ category[0] }}</p>
+                    <p>{{ topCategoryPercentages[index] }}%</p>
+                  </div>
+                  <div class="itemStatBar">
+                    <div class="fillBlue" :style="{ width: parseInt(category[1] / allItemCounts * 100) + '%' }"></div>
+                    <div class="back"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="monthlySummary">
+            <p class="topTitle">Monthly Summary</p>
+            <div class="chartContainer">
+              <Line :data="chartData" :options="{ responsive: true, maintainAspectRatio: false }" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
       <div className="rightSidebar" v-if="!activeAddItem && !activeCheckItem">
         <div className="addItemBanner">
           <img src="/source.svg" alt="">
@@ -468,7 +676,9 @@ const viewingListName = ref()
         </div>
         <div v-if="shoppingList.length > 0" className="listName">
           <p>{{ listName ? listName : 'Shopping list' }}</p>
-          <label for="listName">e</label>
+          <label for="listName">
+            <unicon name="pen"></unicon>
+          </label>
         </div>
         <div className="shoppingListContainer">
           <!-- <div v-for="(item, index) in shoppingList" :key="index" className="shoppingListItem"> -->
@@ -477,10 +687,16 @@ const viewingListName = ref()
             <div v-for="(item, index) in getListItems(category)" :key='index' className="shoppingListItem">
               <p>{{ item.name }}</p>
               <div className="piecesContainer">
-                <button @click="removeItem(item.uid)" className="trashButton hiddenContent">trash</button>
-                <button @click="item.quantity++" className="plusButton hiddenContent">+</button>
+                <button @click="removeItem(item.uid)" className="trashButton hiddenContent">
+                  <unicon name="trash-alt" width="15" hover-fill="white" fill="black"></unicon>
+                </button>
+                <button @click="item.quantity++" className="plusButton hiddenContent">
+                  <unicon name="plus" width="15"></unicon>
+                </button>
                 <p className="trigger">{{ item.quantity }} pcs</p>
-                <button @click="item.quantity--" className="minusButton hiddenContent">-</button>
+                <button @click="item.quantity > 1 ? item.quantity-- : null" className="minusButton hiddenContent">
+                  <unicon name="minus" width="15"></unicon>
+                </button>
               </div>
             </div>
 
@@ -648,6 +864,9 @@ const viewingListName = ref()
 .rightSidebar {
   background-color: rgba(255, 240, 222, 1);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .addListContainer {
@@ -1160,5 +1379,186 @@ strong {
 .item p {
   font-size: 18px;
   font-weight: 500;
+}
+
+.itemStatBar {
+  position: relative;
+  width: 100%;
+}
+
+.itemStatContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.statisticsContainer {
+  width: 100%;
+}
+
+.itemStatBar .back {
+  width: 100%;
+  background-color: rgba(224, 224, 224, 1);
+  height: 6px;
+  margin-top: -6px;
+  border-radius: 4px;
+}
+
+.itemStatBar .fill {
+  width: 0%;
+  border-radius: 4px;
+  background-color: rgba(249, 161, 9, 1);
+  height: 6px;
+  position: relative;
+}
+
+.itemStatBar .fillBlue {
+  width: 0%;
+  border-radius: 4px;
+  background-color: rgba(86, 204, 242, 1);
+  height: 6px;
+  position: relative;
+}
+
+
+
+
+.statisticsContainer .content .topStatistics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 1rem;
+  gap: 1rem;
+}
+
+.statisticsContainer .content .itemName,
+.statisticsContainer .content .categoryName {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1.5rem;
+}
+
+.statisticsContainer p {
+  font-weight: 500;
+}
+
+.topTitle {
+  font-size: 24px;
+}
+
+.chartContainer {
+  position: relative;
+  /* height: 40vh; */
+  /* width: 100%; */
+}
+
+.monthlySummary {
+  position: relative;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.statisticsContainer {
+  overflow-x: auto;
+}
+
+.signOutContainer {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.userEmail {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.signOutBtn {
+  cursor: pointer;
+  background-color: rgba(249, 161, 10, 1);
+  color: white;
+  border: transparent;
+  border-radius: 12px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.signInFormContainer {
+  display: flex;
+  gap: 1rem;
+}
+
+.registerFormContainer {
+  display: flex;
+  gap: 1rem;
+}
+
+.signInFormContainer form div {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+}
+
+.registerFormContainer form div {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+}
+
+.signInFormContainer input {
+  border: 1px solid rgba(249, 161, 10, 1);
+  padding: .5rem;
+  border-radius: 12px;
+}
+
+.signInFormContainer input:focus {
+  outline: transparent;
+}
+
+
+.registerFormContainer input {
+  border: 1px solid rgba(249, 161, 10, 1);
+  padding: .5rem;
+  border-radius: 12px;
+}
+
+.registerFormContainer input:focus {
+  outline: transparent;
+}
+
+.signInBtn {
+  margin-top: .2rem;
+  cursor: pointer;
+  background-color: rgba(249, 161, 10, 1);
+  color: white;
+  border: transparent;
+  border-radius: 12px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.registerBtn {
+  margin-top: .2rem;
+  cursor: pointer;
+  background-color: rgba(249, 161, 10, 1);
+  color: white;
+  border: transparent;
+  border-radius: 12px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dontBtn {
+  background-color: transparent;
+  border: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dontBtn:hover {
+  color: rgba(86, 204, 242, 1);
 }
 </style>

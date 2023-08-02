@@ -10,10 +10,13 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "chart.js": "^4.3.2",
     "dotenv": "^16.3.1",
     "firebase": "^10.1.0",
     "uuid": "^9.0.0",
     "vue": "^3.3.4",
+    "vue-chartjs": "^5.2.0",
+    "vue-unicons": "^3.3.1",
     "vuefire": "^3.1.12"
   },
   "devDependencies": {
