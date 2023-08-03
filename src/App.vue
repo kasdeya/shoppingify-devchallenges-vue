@@ -44,6 +44,7 @@ onMounted(() => {
       userShoppingLists.value = []
       fetchItemList()
       fetchShoppingList()
+      countTops()
     }
   })
   watchEffect(() => {
@@ -75,6 +76,7 @@ const fetchShoppingList = async () => {
   } else {
     userShoppingLists.value = [];
   }
+  groupedShoppingLists()
 }
 
 
@@ -271,9 +273,10 @@ const getListItems = (category) => {
   return groupedListItems.value[category] || [];
 }
 const groupedShopLists = ref()
-const groupedShoppingLists = computed(() => {
+const groupedShoppingLists = () => {
   const grouped = {};
   for (const listName in userShoppingLists.value) {
+    console.log(listName)
     const list = userShoppingLists.value[listName];
     const timestamp = list.timestamp;
     const date = new Date(timestamp.seconds * 1000);
@@ -290,8 +293,8 @@ const groupedShoppingLists = computed(() => {
   calculateItemsPerMonth()
   chartDataGen()
   countTops()
-  return grouped;
-});
+  // return grouped;
+};
 
 const formatDate = (timestamp) => {
   const dateObj = new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1000000);
@@ -480,6 +483,11 @@ const countTops = () => {
   topCategoryPercentages.value = integers
 }
 
+
+const isSidebarOpen = ref(false)
+const toggleSideBar = () => {
+  isSidebarOpen.value = !isSidebarOpen.value;
+}
 </script>
 
 <template>
@@ -489,7 +497,7 @@ const countTops = () => {
   </header>
 
   <main>
-    <div className="mainContainer">
+    <div class="mainContainer" :class="{ 'mobile': isSidebarOpen }">
 
       <div className="leftSidebar">
         <div className="leftSidebarLogo">
@@ -518,7 +526,9 @@ const countTops = () => {
           </div>
         </div>
         <div>
-          <p style="display: none;">cart</p>
+          <div class="cart" @click="toggleSideBar">
+            <unicon name="shopping-cart"></unicon>
+          </div>
         </div>
       </div>
 
@@ -591,7 +601,7 @@ const countTops = () => {
           <span class="viewingListTimestamp">{{ formatTimestamp(viewingList.timestamp) }}</span>
         </div>
         <div className="content" v-if="!viewingList">
-          <div v-for="(lists, date) in groupedShoppingLists" :key="lists.name">
+          <div v-for="(lists, date) in groupedShopLists" :key="lists.name">
             <p class="groupListDate">{{ date }}</p>
             <div className="listItem" @click="viewingList = list, viewingListName = list.name" v-for="list in lists"
               :key="list.name">
@@ -666,7 +676,7 @@ const countTops = () => {
 
       </div>
 
-      <div className="rightSidebar" v-if="!activeAddItem && !activeCheckItem">
+      <div class="rightSidebar" :class="{ 'active': isSidebarOpen }" v-if="!activeAddItem && !activeCheckItem">
 
 
         <div className="addItemBanner">
@@ -725,7 +735,7 @@ const countTops = () => {
 
       </div>
 
-      <div v-if="activeAddItem" className="rightSidebarWhite">
+      <div v-if="activeAddItem" class="rightSidebarWhite" :class="{ 'active': isSidebarOpen }">
         <div className="formContainer">
           <h2>Add a new item</h2>
           <form @submit.prevent="onSubmit">
@@ -757,7 +767,7 @@ const countTops = () => {
         </div>
       </div>
 
-      <div v-if="activeCheckItem" className="checkItemContainer">
+      <div v-if="activeCheckItem" class="checkItemContainer" :class="{ 'active': isSidebarOpen }">
         <button className="checkItemBack" @click="activeCheckItem = ''">back</button>
         <img :src="activeCheckItem.image" alt="" v-if="activeCheckItem.image">
         <div>
@@ -782,7 +792,7 @@ const countTops = () => {
   </main>
 </template>
 
-<style scoped>
+<style>
 .itemContainer {}
 
 .item {
@@ -830,8 +840,10 @@ const countTops = () => {
 }
 
 .categoryContents {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
+  /* display: grid; */
+  /* grid-template-columns: 1fr 1fr 1fr 1fr; */
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .top {
@@ -839,6 +851,7 @@ const countTops = () => {
   justify-content: space-between;
   margin-bottom: 2rem;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .top p {
@@ -868,7 +881,7 @@ const countTops = () => {
   /* border: 1px solid yellow; */
   display: grid;
   grid-template-columns: 90px 1.8fr .5fr;
-  height: 100vh;
+  height: 100%;
 }
 
 .rightSidebar {
@@ -877,7 +890,21 @@ const countTops = () => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  max-height: 100vh;
+  /* max-height: 100vh; */
+  transition: transform 0.3s ease;
+  /* transform: translateX(-100%); */
+}
+
+.rightSidebar.active {
+  transform: translateX(100%);
+}
+
+.rightSidebarWhite.active {
+  transform: translateX(100%);
+}
+
+.checkItemContainer.active {
+  transform: translateX(100%)
 }
 
 .addListContainer {
@@ -1016,7 +1043,8 @@ const countTops = () => {
 
 .addItemBanner img {
   margin-top: -12%;
-  height: 50%;
+  /* height: 50%; */
+  height: 100%;
 }
 
 .listCategory {
@@ -1093,6 +1121,7 @@ const countTops = () => {
 
 .navigation div:hover .tooltip {
   opacity: 1;
+  z-index: 999;
   pointer-events: auto;
   right: -50px;
 }
@@ -1108,6 +1137,7 @@ const countTops = () => {
   right: -30px;
   font-weight: 600;
   opacity: 0;
+  z-index: 999;
   pointer-events: none;
   transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
@@ -1130,8 +1160,16 @@ const countTops = () => {
 }
 
 .rightSidebarWhite {
-  background-color: transparent;
+  background-color: white;
   position: relative;
+
+
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /* max-height: 100vh; */
+  transition: all 0.3s ease;
+  /* transform: translateX(-100%); */
 }
 
 .formContainer form {
@@ -1258,6 +1296,7 @@ const countTops = () => {
   padding: 2.5rem;
   background-color: white;
   justify-content: space-between;
+  transition: all 0.3s ease;
 }
 
 .checkItemContainer label {
@@ -1571,5 +1610,91 @@ strong {
 
 .dontBtn:hover {
   color: rgba(86, 204, 242, 1);
+}
+
+.cart {
+  cursor: pointer;
+  display: flex !important;
+  justify-content: center !important;
+  padding: 1rem;
+}
+
+.unicon svg {
+  /* color: aqua !important; */
+  /* fill: aqua !important; */
+  /* stroke-width: 10px !important; */
+}
+
+.leftSidebar .cart .unicon {
+  display: flex !important;
+  align-items: center !important;
+  background-color: rgba(249, 161, 10, 1);
+  border-radius: 100%;
+  width: fit-content;
+  padding: .5rem;
+  fill: white !important;
+}
+
+.piecesContainer svg {
+  width: 100% !important;
+  fill: rgba(249, 161, 10, 1);
+}
+
+.piecesContainer button:hover svg {
+  fill: white !important;
+}
+
+@media (max-width: 815px) {
+  .mainContainer {
+    grid-template-columns: 90px 1fr 0;
+    transition: all 0.3s ease;
+  }
+
+  .itemListContainer {
+    padding: 1rem 5px;
+  }
+
+  .historyListContainer {
+    padding: 1rem 5px;
+  }
+
+  .topStatistics {
+    padding: 1rem 5px !important;
+  }
+
+  .signInFormContainer,
+  .registerFormContainer {
+    flex-wrap: wrap;
+  }
+
+  .mobile {
+    grid-template-columns: 90px 0 1fr !important;
+    transition: all 0.3s ease;
+  }
+
+  .rightSidebar.active {
+    transform: translateX(0%);
+  }
+
+  .rightSidebarWhite.active {
+    transform: translateX(0%);
+  }
+
+  .rightSidebarWhite {
+    transform: translateX(100%);
+  }
+
+  .rightSidebar {
+    transform: translateX(100%);
+  }
+
+  .checkItemContainer {
+    transform: translateX(100%);
+    padding: .5rem;
+  }
+
+  .checkItemContainer.active {
+    transform: translateX(0%)
+  }
 }
 </style>

@@ -5,9 +5,9 @@ import { VueFire, VueFireAuth } from 'vuefire'
 import App from './App.vue'
 import { firebaseApp } from './firebase'
 import Unicon from 'vue-unicons'
-import { uniRedo, uniPen, uniChart, uniListUl, uniTrashAlt, uniPlus, uniMinus } from 'vue-unicons/dist/icons'
+import { uniRedo, uniPen, uniChart, uniListUl, uniTrashAlt, uniPlus, uniMinus, uniShoppingCart } from 'vue-unicons/dist/icons'
 
-Unicon.add([uniRedo, uniPen, uniChart, uniListUl, uniTrashAlt, uniPlus, uniMinus])
+Unicon.add([uniRedo, uniPen, uniChart, uniListUl, uniTrashAlt, uniPlus, uniMinus, uniShoppingCart])
 
 const app = createApp(App)
 app.use(Unicon).use(VueFire, {
