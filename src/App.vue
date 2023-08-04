@@ -12,24 +12,26 @@ import {
 } from 'chart.js'
 import { Line } from 'vue-chartjs'
 
-import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { computed, onMounted, ref, watchEffect } from 'vue';
 import { useFirebaseAuth, useFirestore } from 'vuefire'
 import { arrayUnion, collection, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid'
+import SignIn from './components/SignIn.vue';
+import Register from './components/Register.vue';
 const db = useFirestore()
 const auth = useFirebaseAuth()
-const user = ref()
-const signUpEmail = ref('')
-const signUpPassword = ref('')
-const userId = ref()
+const user = ref(null)
+const userId = ref('guest')
 const userItems = ref([])
 const userShoppingLists = ref([])
 const categories = ref(['Fruits and vegetables', 'Meat and fish', 'Beverages'])
 const registering = ref(false)
 const canSignIn = ref(true)
 
-// Use watchEffect to create the observer
+const firstSignIn = ref(true)
+
+// // Use watchEffect to create the observer
 onMounted(() => {
   onAuthStateChanged(auth, (currentUser) => {
     if (currentUser) {
@@ -79,43 +81,18 @@ const fetchShoppingList = async () => {
   groupedShoppingLists()
 }
 
-
-
-const handleRegistration = () => {
-  createUserWithEmailAndPassword(auth, signUpEmail.value, signUpPassword.value)
-    .then((userCredential) => {
-      // Signed in
-      user.value = userCredential.user;
-      signUpEmail.value = ''
-      signUpPassword.value = ''
-      console.log(user)
-      registering.value = false
-      // ..
-    })
-    .catch((error) => {
-      const errorCode = error.code
-      const errorMessage = error.message
-      // ..
-    })
+const handleLoggedIn = (loggedInUser) => {
+  // console.log('called sign in')
+  user.value = loggedInUser;
+  userId.value = user.value.uid
+  fetchItemList()
+  fetchShoppingList()
+  firstSignIn.value = false
 }
-
-const signInEmail = ref('')
-const signInPassword = ref('')
-
-const handleSignIn = () => {
-  signInWithEmailAndPassword(auth, signInEmail.value, signInPassword.value)
-    .then((userCredential) => {
-      // Signed in
-      user.value = userCredential.user
-      signInEmail.value = ''
-      signInPassword.value = ''
-      console.log(user)
-      //
-    })
-    .catch((error) => {
-      const errorCode = error.code
-      const errorMessage = error.message
-    })
+const handleSignUp = (signedUpUser) => {
+  console.log('called sing up')
+  user.value = signedUpUser
+  registering.value = false
 }
 
 const handleSignOut = async () => {
@@ -131,20 +108,7 @@ const handleSignOut = async () => {
   }
 }
 
-
-const items = ref([
-  {
-    name: 'tomato',
-    note: 'tomatoes are red and delicious',
-    image: 'https://i5.walmartimages.com/seo/Slicing-Tomato-Each_9f8b7456-81d0-4dc2-b422-97cf63077762.0ddba51bbf14a5029ce82f5fce878dee.jpeg',
-    category: 'Fruits and vegetables',
-    quantity: 1
-  }
-])
-
-const shoppingList = ref([
-
-])
+const shoppingList = ref([])
 
 const nameInput = ref('')
 const noteInput = ref('')
@@ -160,8 +124,6 @@ const onSubmit = async () => {
     quantity: 1,
     uid: generateUniqueId()
   }
-
-  items.value.push(newItem)
 
   // Clear the input fields after submission
   nameInput.value = '';
@@ -210,7 +172,6 @@ const handleAddShoppingList = async () => {
     completed: false,
     cancelled: false,
   }
-
 
   try {
     await setDoc(doc(userRef, userId.value), {
@@ -293,13 +254,7 @@ const groupedShoppingLists = () => {
   calculateItemsPerMonth()
   chartDataGen()
   countTops()
-  // return grouped;
 };
-
-const formatDate = (timestamp) => {
-  const dateObj = new Date(timestamp.seconds * 1000 + timestamp.nanoseconds / 1000000);
-  return dateObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-}
 
 const activeAddItem = ref(false)
 const categoryInputActive = ref(false)
@@ -308,7 +263,6 @@ const activeCheckItem = ref()
 const handleClickItem = (item) => {
   activeAddItem.value = false
   activeCheckItem.value = item
-
 }
 
 const handleItemDeletion = async () => {
@@ -539,36 +493,11 @@ const toggleSideBar = () => {
         </div>
 
         <div v-if="registering" className="registerFormContainer">
-          <form @submit.prevent="handleRegistration">
-            <div>
-              <label for="email">
-                <input type="email" id="email" name="email" placeholder="email" v-model="signUpEmail">
-              </label>
-              <label for="password">
-                <input type="password" id="pass" name="pass" placeholder="password" v-model="signUpPassword">
-              </label>
-            </div>
-            <button class="registerBtn" type="submit">Register</button>
-          </form>
-          <p>Have an account? <button class="dontBtn" @click="registering = false">Login</button></p>
+          <Register :user="user" @signed-up="handleSignUp" @registering="registering = false" />
         </div>
 
         <div v-if="userId == 'guest' && !registering" className="signInFormContainer">
-          <form @submit.prevent="handleSignIn">
-            <div>
-              <label for="email">
-                <input type="email" id="email" name="email" placeholder="john@email.com" v-model="signInEmail">
-              </label>
-              <label for="password">
-                <input type="password" id="pass" name="pass" placeholder="password" v-model="signInPassword">
-              </label>
-            </div>
-            <button class="signInBtn" type="submit">Sign In</button>
-          </form>
-          <div>
-            <p>Don't have an account? <button class="dontBtn" @click="registering = true">register</button></p>
-            <p>Currently using app as guest</p>
-          </div>
+          <SignIn :user="user" @logged-in="handleLoggedIn" @registering="registering = true" />
         </div>
 
         <div class="signOutContainer">

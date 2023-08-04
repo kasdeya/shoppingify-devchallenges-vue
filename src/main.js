@@ -9,6 +9,7 @@ import { uniRedo, uniPen, uniChart, uniListUl, uniTrashAlt, uniPlus, uniMinus, u
 
 Unicon.add([uniRedo, uniPen, uniChart, uniListUl, uniTrashAlt, uniPlus, uniMinus, uniShoppingCart])
 
+
 const app = createApp(App)
 app.use(Unicon).use(VueFire, {
     firebaseApp,
