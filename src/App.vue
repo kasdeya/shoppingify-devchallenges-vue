@@ -19,6 +19,8 @@ import { arrayUnion, collection, doc, getDoc, setDoc, updateDoc } from 'firebase
 import { v4 as uuidv4 } from 'uuid'
 import SignIn from './components/SignIn.vue';
 import Register from './components/Register.vue';
+import Navigation from './components/Navigation.vue'
+import MainItems from './components/MainItems.vue';
 const db = useFirestore()
 const auth = useFirebaseAuth()
 const user = ref(null)
@@ -50,7 +52,6 @@ onMounted(() => {
     }
   })
   watchEffect(() => {
-
   })
 })
 
@@ -59,7 +60,7 @@ const fetchItemList = async () => {
   // const docSnap = await getDoc(userRef)
   const snapshot = await getDoc(userRef);
 
-  if (snapshot.exists()) {
+  if (snapshot.data().items) {
     console.log("Document data:", snapshot.data());
     userItems.value = snapshot.data().items
   } else {
@@ -82,7 +83,7 @@ const fetchShoppingList = async () => {
 }
 
 const handleLoggedIn = (loggedInUser) => {
-  // console.log('called sign in')
+  console.log('called sign in')
   user.value = loggedInUser;
   userId.value = user.value.uid
   fetchItemList()
@@ -189,50 +190,30 @@ const removeItem = (uid) => {
   shoppingList.value = shoppingList.value.filter((item) => item.uid !== uid)
 }
 
-const groupedItems = computed(() => {
+const groupItemsByCategory = (items) => {
   const grouped = {};
-  for (const item of userItems.value) {
+  for (const item of items) {
     if (!grouped[item.category]) {
       grouped[item.category] = [];
     }
     grouped[item.category].push(item)
   }
-  return grouped
-})
+  return grouped;
+};
 
-const getCategoryItems = (category) => {
-  return groupedItems.value[category] || [];
-}
+// Usage example
+const groupedItems = computed(() => {
+  return groupItemsByCategory(userItems.value);
+});
 
 const groupedShoplistItems = computed(() => {
-  const grouped = {};
-  for (const item of viewingList.value.items) {
-    if (!grouped[item.category]) {
-      grouped[item.category] = [];
-    }
-    grouped[item.category].push(item)
-  }
-  return grouped
-})
-
-const getShoplistItems = (category) => {
-  return groupedShoplistItems.value[category] || [];
-}
+  return groupItemsByCategory(viewingList.value.items);
+});
 
 const groupedListItems = computed(() => {
-  const grouped = {};
-  for (const item of shoppingList.value) {
-    if (!grouped[item.category]) {
-      grouped[item.category] = [];
-    }
-    grouped[item.category].push(item)
-  }
-  return grouped
-})
+  return groupItemsByCategory(shoppingList.value);
+});
 
-const getListItems = (category) => {
-  return groupedListItems.value[category] || [];
-}
 const groupedShopLists = ref()
 const groupedShoppingLists = () => {
   const grouped = {};
@@ -445,45 +426,12 @@ const toggleSideBar = () => {
 </script>
 
 <template>
-  <header>
-    <div class="wrapper">
-    </div>
-  </header>
-
   <main>
     <div class="mainContainer" :class="{ 'mobile': isSidebarOpen }">
 
       <div className="leftSidebar">
-        <div className="leftSidebarLogo">
-          <img src="../public/logo.svg" />
-        </div>
-        <div className="navigation">
-          <div class="itemsNav">
-            <button :class="[activeNav == ITEMS ? 'activeNav' : '']" @click="activeNav = ITEMS">
-              <unicon name="list-ul"></unicon>
-            </button>
-            <div className="tooltip">items</div>
-          </div>
-          <div class="historyNav">
-            <button :disabled="userItems.length === 0" :class="[activeNav == HISTORY ? 'activeNav' : '']"
-              @click="activeNav = HISTORY">
-              <unicon name="redo"></unicon>
-            </button>
-            <div className="tooltip">history</div>
-          </div>
-          <div class="statisticsNav">
-            <button :disabled="userItems.length === 0" :class="[activeNav == STATISTICS ? 'activeNav' : '']"
-              @click="activeNav = STATISTICS">
-              <unicon name="chart"></unicon>
-            </button>
-            <div className="tooltip">statistics</div>
-          </div>
-        </div>
-        <div>
-          <div class="cart" @click="toggleSideBar">
-            <unicon name="shopping-cart"></unicon>
-          </div>
-        </div>
+        <Navigation :activeNav="activeNav" :userItems="userItems" @toggleSideBar="toggleSideBar"
+          @toggleNav="(nav) => activeNav = nav" />
       </div>
 
       <div className="itemListContainer" v-if="activeNav == ITEMS">
@@ -505,18 +453,9 @@ const toggleSideBar = () => {
           <button className="signOutBtn" v-if="userId && userId !== 'guest'" @click="handleSignOut">Sign Out</button>
         </div>
 
-        <div className="content">
-          <div className="category" v-for="(category, index) in categories" :key="index">
-            <p className="itemCategory">{{ category }}</p>
-            <div className="categoryContents">
-              <div v-for="(item, index) in getCategoryItems(category)" className="item" v-if="userItems">
-                <p @click="handleClickItem(item)">{{ item.name }}</p>
-                <button @click="handleAddItem(item)">
-                  <unicon name="plus" width="20" fill="rgba(193, 193, 196, 1)"></unicon>
-                </button>
-              </div>
-            </div>
-          </div>
+        <div class="content" v-if="userItems.length > 0">
+          <MainItems @handleClickItem="(item) => handleClickItem(item)" @handleAddItem="(item) => handleAddItem(item)"
+            :activeNav="activeNav" :items="userItems" :categories="categories" />
         </div>
       </div>
 
@@ -545,15 +484,17 @@ const toggleSideBar = () => {
           </div>
         </div>
         <div class="content" v-else>
-          <div className="category" v-for="(category, index) in categories" :key="index">
-            <p v-if="getShoplistItems(category).length > 0" className="shopListItemCategory">{{ category }}</p>
+          <MainItems @handleClickItem="(item) => handleClickItem(item)" :activeNav="activeNav" :items="viewingList.items"
+            :categories="categories" />
+          <!-- <div className="category" v-for="(category, index) in categories" :key="index">
+            <p v-if="groupedShoplistItems[category]" className="shopListItemCategory">{{ category }}</p>
             <div className="categoryContents">
-              <div v-for="(item, index) in getShoplistItems(category)" className="item" v-if="viewingList">
+              <div v-for="(item, index) in groupedShoplistItems[category]" className="item" v-if="viewingList">
                 <p @click="handleClickItem(item)">{{ item.name }}</p>
                 <span class="pcs"><strong>{{ item.quantity }}</strong> pcs</span>
               </div>
             </div>
-          </div>
+          </div> -->
         </div>
       </div>
 
@@ -628,8 +569,8 @@ const toggleSideBar = () => {
         <div className="shoppingListContainer">
           <!-- <div v-for="(item, index) in shoppingList" :key="index" className="shoppingListItem"> -->
           <div v-for="(category, categoryIndex) in categories" :key="categoryIndex" v-if="shoppingList.length > 0">
-            <p v-if="getListItems(category).length > 0" className="listCategory">{{ category }}</p>
-            <div v-for="(item, index) in getListItems(category)" :key='index' className="shoppingListItem">
+            <p v-if="groupedListItems[category]" className="listCategory">{{ category }}</p>
+            <div v-for="(item, index) in groupedListItems[category]" :key='index' className="shoppingListItem">
               <p>{{ item.name }}</p>
               <div className="piecesContainer">
                 <button @click="removeItem(item.uid)" className="trashButton hiddenContent">
