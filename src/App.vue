@@ -21,6 +21,8 @@ import SignIn from './components/SignIn.vue';
 import Register from './components/Register.vue';
 import Navigation from './components/Navigation.vue'
 import MainItems from './components/MainItems.vue';
+import ShoppingLists from './components/ShoppingLIsts.vue';
+import Statistics from './components/Statistics.vue';
 const db = useFirestore()
 const auth = useFirebaseAuth()
 const user = ref(null)
@@ -48,7 +50,7 @@ onMounted(() => {
       userShoppingLists.value = []
       fetchItemList()
       fetchShoppingList()
-      countTops()
+      // countTops()
     }
   })
   watchEffect(() => {
@@ -232,9 +234,9 @@ const groupedShoppingLists = () => {
   }
 
   groupedShopLists.value = grouped
-  calculateItemsPerMonth()
-  chartDataGen()
-  countTops()
+  // calculateItemsPerMonth()
+  // chartDataGen()
+  // countTops()
 };
 
 const activeAddItem = ref(false)
@@ -300,123 +302,11 @@ const formatTimestamp = (timestamp) => {
 
 const viewingList = ref()
 const viewingListName = ref()
-const itemsPerMonth = ref()
-
-const calculateItemsPerMonth = () => {
-  const grouped = {}
-  for (let key in groupedShopLists.value) {
-    for (let date of groupedShopLists.value[key]) {
-      if (!grouped[key]) {
-        grouped[key] = date.items.length
-      } else {
-        grouped[key] += date.items.length
-      }
-    }
-  }
-  itemsPerMonth.value = grouped
-};
-
-const chartData = ref()
-// const chartOptions = ref({ responsive: true })
-const chartDataGen = () => {
-  const data = {
-    labels: [],
-    datasets: [
-      {
-        label: 'items',
-        backgroundColor: 'rgba(249, 161, 9, 1)',
-        data: []
-      }
-    ]
-  }
-
-  for (let key in itemsPerMonth.value) {
-    data.labels.push(key)
-    data.datasets[0].data.push(itemsPerMonth.value[key])
-  }
-  chartData.value = data
+const viewListToggle = (list) => {
+  viewingList.value = list
+  viewingListName.value = list.name
 }
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-)
-
-const topItemCounts = ref()
-const topCategoryCounts = ref()
-const allItemCounts = ref()
-const topItemPercentages = ref()
-const topCategoryPercentages = ref()
-const countTops = () => {
-  const grouped = groupedShopLists.value;
-  const itemCounts = {};
-  const categoryCounts = {};
-  let totalItems = 0
-
-  for (const month in grouped) {
-    const shoppingLists = grouped[month];
-    console.log(shoppingLists)
-
-    for (const shoplist in shoppingLists) {
-      const items = shoppingLists[shoplist].items;
-      totalItems += shoppingLists[shoplist].items.length
-
-      for (const item of items) {
-        const itemName = item.name;
-        const itemCategory = item.category
-
-        if (itemCounts[itemName]) {
-          itemCounts[itemName] += 1;
-        } else {
-          itemCounts[itemName] = 1;
-        }
-        if (categoryCounts[itemCategory]) {
-          categoryCounts[itemCategory] += 1;
-        } else {
-          categoryCounts[itemCategory] = 1;
-        }
-      }
-    }
-  }
-
-  const keyValueArray = Object.entries(itemCounts)
-  const sortedArray = keyValueArray.sort((a, b) => b[1] - a[1])
-  // const sortedObject = Object.fromEntries(sortedArray)
-  const percentages = []
-  for (let item of sortedArray) {
-    if (percentages.length < 4) {
-      let percentage = parseInt(item[1] / totalItems * 100)
-      percentages.push(percentage)
-    }
-  }
-  const categoryKeyValueArray = Object.entries(categoryCounts)
-  const sortedCategoryArray = categoryKeyValueArray.sort((a, b) => b[1] - a[1])
-  const categoryPercentages = []
-  for (let category of sortedCategoryArray) {
-    if (categoryPercentages.length < 4) {
-      let percentage = category[1] / totalItems * 100
-      categoryPercentages.push(percentage)
-    }
-  }
-  const roundedSum = categoryPercentages.reduce((sum, value) => sum + Math.ceil(value), 0)
-  const difference = 100 - roundedSum
-  const indexToCorrect = categoryPercentages.findIndex((value) => Math.ceil(value) !== value)
-  categoryPercentages[indexToCorrect] += difference
-  const integers = categoryPercentages.map((value) => Math.ceil(value))
-  // console.log(percentages)
-  // console.log(sortedArray)
-  // console.log(sortedObject)
-  topItemCounts.value = sortedArray
-  topCategoryCounts.value = sortedCategoryArray
-  allItemCounts.value = totalItems
-  topItemPercentages.value = percentages
-  topCategoryPercentages.value = integers
-}
 
 
 const isSidebarOpen = ref(false)
@@ -469,85 +359,20 @@ const toggleSideBar = () => {
           <span class="viewingListTimestamp">{{ formatTimestamp(viewingList.timestamp) }}</span>
         </div>
         <div className="content" v-if="!viewingList">
-          <div v-for="(lists, date) in groupedShopLists" :key="lists.name">
-            <p class="groupListDate">{{ date }}</p>
-            <div className="listItem" @click="viewingList = list, viewingListName = list.name" v-for="list in lists"
-              :key="list.name">
-              <p className="shopListName">{{ list.name }}</p>
-              <div className="shopListDetails">
-                <span className="shopListDate">{{ formatTimestamp(list.timestamp) }}</span>
-                <span :class="[list.completed ? 'completed' : 'ongoing']" v-if="!list.cancelled">{{ list.completed ?
-                  'completed' : 'ongoing' }}</span>
-                <span class="cancelled" v-else>cancelled</span>
-              </div>
-            </div>
-          </div>
+          <ShoppingLists :groupedShopLists="groupedShopLists" :formatTimestamp="formatTimestamp"
+            @viewListToggle="viewListToggle" />
         </div>
         <div class="content" v-else>
           <MainItems @handleClickItem="(item) => handleClickItem(item)" :activeNav="activeNav" :items="viewingList.items"
             :categories="categories" />
-          <!-- <div className="category" v-for="(category, index) in categories" :key="index">
-            <p v-if="groupedShoplistItems[category]" className="shopListItemCategory">{{ category }}</p>
-            <div className="categoryContents">
-              <div v-for="(item, index) in groupedShoplistItems[category]" className="item" v-if="viewingList">
-                <p @click="handleClickItem(item)">{{ item.name }}</p>
-                <span class="pcs"><strong>{{ item.quantity }}</strong> pcs</span>
-              </div>
-            </div>
-          </div> -->
         </div>
       </div>
 
       <div class="statisticsContainer" v-if="activeNav == STATISTICS">
-        <div class="content">
-          <div class="topStatistics">
-
-            <div class="topItems">
-              <p class="topTitle">Top items</p>
-
-              <div v-for="(item, index) in topItemCounts.slice(0, 3)" :key="index">
-                <div class="itemStatContainer">
-                  <div class="itemName">
-                    <p>{{ item[0] }}</p>
-                    <p>{{ parseInt(item[1] / allItemCounts * 100) }}%</p>
-                  </div>
-                  <div class="itemStatBar">
-                    <div class="fill" :style="{ width: parseInt(item[1] / allItemCounts * 100) + '%' }"></div>
-                    <div class="back"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="topCategories">
-              <p class="topTitle">Top Categories</p>
-
-              <div v-for="(category, index) in topCategoryCounts.slice(0, 3)" :key="index">
-                <div class="itemStatContainer">
-                  <div class="categoryName">
-                    <p>{{ category[0] }}</p>
-                    <p>{{ topCategoryPercentages[index] }}%</p>
-                  </div>
-                  <div class="itemStatBar">
-                    <div class="fillBlue" :style="{ width: parseInt(category[1] / allItemCounts * 100) + '%' }"></div>
-                    <div class="back"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="monthlySummary">
-            <p class="topTitle">Monthly Summary</p>
-            <div class="chartContainer">
-              <Line :data="chartData" :options="{ responsive: true, maintainAspectRatio: false }" />
-            </div>
-          </div>
-        </div>
-
+        <Statistics :groupedShopLists="groupedShopLists" />
       </div>
 
       <div class="rightSidebar" :class="{ 'active': isSidebarOpen }" v-if="!activeAddItem && !activeCheckItem">
-
 
         <div className="addItemBanner">
           <img src="../public/source.svg" alt="">
@@ -557,9 +382,6 @@ const toggleSideBar = () => {
           </div>
         </div>
 
-
-
-
         <div v-if="shoppingList.length > 0" className="listName">
           <p>{{ listName ? listName : 'Shopping list' }}</p>
           <label for="listName">
@@ -568,9 +390,9 @@ const toggleSideBar = () => {
         </div>
         <div className="shoppingListContainer">
           <!-- <div v-for="(item, index) in shoppingList" :key="index" className="shoppingListItem"> -->
-          <div v-for="(category, categoryIndex) in categories" :key="categoryIndex" v-if="shoppingList.length > 0">
+          <div v-for="( category, categoryIndex ) in  categories " :key="categoryIndex" v-if="shoppingList.length > 0">
             <p v-if="groupedListItems[category]" className="listCategory">{{ category }}</p>
-            <div v-for="(item, index) in groupedListItems[category]" :key='index' className="shoppingListItem">
+            <div v-for="( item, index ) in  groupedListItems[category] " :key='index' className="shoppingListItem">
               <p>{{ item.name }}</p>
               <div className="piecesContainer">
                 <button @click="removeItem(item.uid)" className="trashButton hiddenContent">
@@ -585,8 +407,8 @@ const toggleSideBar = () => {
                 </button>
               </div>
             </div>
-
           </div>
+
           <div v-else className="emptyList">
             <p>No items</p>
           </div>
@@ -624,7 +446,7 @@ const toggleSideBar = () => {
                   {{ categoryInput }}</p>
               </div>
               <div className="fakeOption" v-if="categoryInputActive">
-                <ul v-for="(category, index) in categories" :key="index">
+                <ul v-for="( category, index ) in  categories " :key="index">
                   <li @click="categoryInput = category, categoryInputActive = false">{{ category }}</li>
                 </ul>
               </div>
@@ -667,6 +489,7 @@ const toggleSideBar = () => {
 
 .item {
   border-radius: 12px;
+  cursor: pointer;
   box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.05);
   display: flex;
   width: fit-content;
@@ -1032,7 +855,6 @@ const toggleSideBar = () => {
 .rightSidebarWhite {
   background-color: white;
   position: relative;
-
 
   display: flex;
   flex-direction: column;
