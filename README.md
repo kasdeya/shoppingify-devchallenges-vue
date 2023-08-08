@@ -1,35 +1,25 @@
-# shoppingify-new
+## Table of Contents
 
-This template should help get you started developing with Vue 3 in Vite.
+- [Overview](#overview)
+  - [Built With](#built-with)
+- [Features](#features)
+- [Contact](#contact)
 
-## Recommended IDE Setup
+## Overview
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur) + [TypeScript Vue Plugin (Volar)](https://marketplace.visualstudio.com/items?itemName=Vue.vscode-typescript-vue-plugin).
+![screenshot](./public/screenshot.png)
 
-## Customize configuration
+[Live Demo](https://shoppingify-devchallenges-vue.vercel.app/)
 
-See [Vite Configuration Reference](https://vitejs.dev/config/).
+### Built With
 
-## Project Setup
+- [Vue.js](https://vuejs.org/)
 
-```sh
-npm install
-```
+## Features
 
-### Compile and Hot-Reload for Development
+This application/site was created as a submission to a [DevChallenges](https://devchallenges.io/challenges) challenge. The [challenge](https://devchallenges.io/challenges/mGd5VpbO4JnzU6I9l96x) was to build an application to complete the given user stories.
 
-```sh
-npm run dev
-```
+## Contact
 
-### Compile and Minify for Production
-
-```sh
-npm run build
-```
-
-### Lint with [ESLint](https://eslint.org/)
-
-```sh
-npm run lint
-```
+- Website [jesusvenegas.com](https://jesusvenegas.com)
+- GitHub [@kasdeya](https://github.com/kasdeya)
