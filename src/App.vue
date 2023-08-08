@@ -1319,6 +1319,10 @@ strong {
     transition: all 0.3s ease;
   }
 
+  .piecesContainer .hiddenContent {
+    display: inline;
+  }
+
   .itemListContainer {
     padding: 1rem 5px;
   }
