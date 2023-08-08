@@ -1,17 +1,4 @@
 <script setup>
-
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-} from 'chart.js'
-import { Line } from 'vue-chartjs'
-
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { computed, onMounted, ref, watchEffect } from 'vue';
 import { useFirebaseAuth, useFirestore } from 'vuefire'
@@ -204,13 +191,6 @@ const groupItemsByCategory = (items) => {
 };
 
 // Usage example
-const groupedItems = computed(() => {
-  return groupItemsByCategory(userItems.value);
-});
-
-const groupedShoplistItems = computed(() => {
-  return groupItemsByCategory(viewingList.value.items);
-});
 
 const groupedListItems = computed(() => {
   return groupItemsByCategory(shoppingList.value);
@@ -234,9 +214,6 @@ const groupedShoppingLists = () => {
   }
 
   groupedShopLists.value = grouped
-  // calculateItemsPerMonth()
-  // chartDataGen()
-  // countTops()
 };
 
 const activeAddItem = ref(false)
